@@ -4,6 +4,11 @@ package b
 
 import "reflect"
 
-func RespondTo(object interface{}, methodName string) bool {
-	return reflect.ValueOf(object).MethodByName(methodName).IsValid()
+func RespondTo(object interface{}, methodNames ...string) bool {
+	for _, m := range methodNames {
+		if !reflect.ValueOf(object).MethodByName(m).IsValid() {
+			return false
+		}
+	}
+	return true
 }

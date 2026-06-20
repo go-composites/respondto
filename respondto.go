@@ -110,11 +110,15 @@ func checkCall(pass *analysis.Pass, call *ast.CallExpr) {
 		if fun.Sel.Name != "RespondTo" {
 			return
 		}
-		if obj, isFunc := selectedPackageFunc(pass, fun); isFunc {
+		if _, isFunc := selectedPackageFunc(pass, fun); isFunc {
 			// Qualified package-level RespondTo(object, name).
-			if !isPackageLevel(obj) {
-				return
-			}
+			//
+			// A package-qualified selector (pkg.RespondTo) that resolves to a
+			// *types.Func with no receiver is necessarily a package-level
+			// function — selectedPackageFunc already guarantees the no-receiver
+			// part — so no additional isPackageLevel check is needed here. (The
+			// unqualified Ident path below still needs that check, because an
+			// unqualified RespondTo could be a local closure.)
 			if len(call.Args) < 2 {
 				return
 			}
@@ -130,10 +134,6 @@ func checkCall(pass *analysis.Pass, call *ast.CallExpr) {
 		}
 
 	default:
-		return
-	}
-
-	if objType == nil || nameArg == nil {
 		return
 	}
 
@@ -174,14 +174,14 @@ func selectedPackageFunc(pass *analysis.Pass, sel *ast.SelectorExpr) (*types.Fun
 	return fn, true
 }
 
-// isPackageLevel reports whether fn is a package-scoped function (its parent
-// scope is a package scope), as opposed to a local closure assigned to a name.
+// isPackageLevel reports whether fn is a package-scoped function (it is the
+// object its own package scope binds to its name), as opposed to a local
+// closure assigned to a name. A func with no package (a predeclared/universe
+// func) is never package-level; the nil-package case is handled by the short
+// circuit, since a nil *types.Package compares unequal to fn.
 func isPackageLevel(fn *types.Func) bool {
 	pkg := fn.Pkg()
-	if pkg == nil {
-		return false
-	}
-	return pkg.Scope().Lookup(fn.Name()) == fn
+	return pkg != nil && pkg.Scope().Lookup(fn.Name()) == fn
 }
 
 // stringLiteralValue returns the constant string value of e when e is a string
